@@ -218,9 +218,9 @@ class ReplicatedChatService(chat_pb2_grpc.ChatServiceServicer):
             resp = stub.JoinCluster(req, timeout=3)
             if resp.success:
                 logging.info("Successfully joined cluster. State transferred.")
-                self.current_leader_address = self.current_leader_address  # Already set.
+                self.current_leader_address = self.current_leader_address
                 self.last_heartbeat = time.time()
-                # Synchronize local database with the state from the leader.
+                # Synchronize local database with state from the leader.
                 state = json.loads(resp.state)
                 accounts = state.get("accounts", [])
                 messages = state.get("messages", [])
@@ -272,6 +272,9 @@ class ReplicatedChatService(chat_pb2_grpc.ChatServiceServicer):
     def replicate_to_followers(self, op_type, data):
         req = chat_pb2.ReplicationRequest(operation_type=op_type, data=json.dumps(data))
         for addr in self.replica_addresses:
+            # Skip self to avoid duplicate insertion.
+            if addr == self.my_address:
+                continue
             try:
                 channel = grpc.insecure_channel(addr)
                 stub = chat_pb2_grpc.ChatServiceStub(channel)
