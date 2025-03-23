@@ -5,6 +5,8 @@ from tkinter import messagebox, simpledialog
 import grpc
 import hashlib
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import threading
 
 import chat_pb2
 import chat_pb2_grpc
@@ -15,11 +17,18 @@ import chat_pb2_grpc
 with open("config_client.json", "r") as config_file:
     client_config = json.load(config_file)
 
-# Force IPv4: use 127.0.0.1 instead of "localhost"
+# Force IPv4: use 127.0.0.1 explicitly
 host = client_config.get("client_connect_host", "127.0.0.1")
 if host == "localhost":
     host = "127.0.0.1"
 client_config["client_connect_host"] = host
+
+# Read adjustable timeout/retry parameters from the config.
+RPC_TIMEOUT = client_config.get("rpc_timeout", 1)
+FALLBACK_TIMEOUT = client_config.get("fallback_timeout", 1)
+OVERALL_LEADER_LOOKUP_TIMEOUT = client_config.get("overall_leader_lookup_timeout", 5)
+RETRY_DELAY = client_config.get("retry_delay", 1)
+CLIENT_HEARTBEAT_INTERVAL = client_config.get("client_heartbeat_interval", 10)
 
 def hash_password(password: str) -> str:
     return hashlib.sha256(password.encode()).hexdigest()
@@ -31,9 +40,13 @@ class ChatClientApp(tk.Tk):
         self.geometry("400x350")
         self.current_user = None
 
-        # Connect using IPv4
+        # Initial connection to the configured address.
         self.leader_address = f"{client_config['client_connect_host']}:{client_config['client_connect_port']}"
         self.connect_to_leader(self.leader_address)
+
+        # Start background thread for client heartbeat checking.
+        self.running = True
+        threading.Thread(target=self.client_heartbeat_check, daemon=True).start()
 
         container = tk.Frame(self)
         container.pack(fill="both", expand=True)
@@ -53,21 +66,34 @@ class ChatClientApp(tk.Tk):
 
     def update_leader(self):
         """
-        Call GetLeaderInfo RPC to update the leader address and reconnect.
-        If the call fails, keep the current connection.
+        Try to update the leader connection by concurrently querying all fallback addresses.
+        Each address is given a timeout (FALLBACK_TIMEOUT). Overall lookup waits up to OVERALL_LEADER_LOOKUP_TIMEOUT.
         """
-        try:
-            resp = self.stub.GetLeaderInfo(chat_pb2.GetLeaderInfoRequest(), timeout=2)
-            if resp.success and resp.leader_address and resp.leader_address != "Unknown":
-                if resp.leader_address != self.leader_address:
-                    print(f"Leader changed to {resp.leader_address}")
-                self.connect_to_leader(resp.leader_address)
-                # Also update fallback replica addresses.
-                client_config["replica_addresses"] = list(resp.replica_addresses)
-                return
-        except Exception as e:
-            print("Current leader lookup failed. Trying fallback addresses...", e)
-            time.sleep(1)
+        fallback = client_config.get("replica_addresses", [])
+        def query_addr(addr):
+            try:
+                channel = grpc.insecure_channel(addr)
+                stub = chat_pb2_grpc.ChatServiceStub(channel)
+                resp = stub.GetLeaderInfo(chat_pb2.GetLeaderInfoRequest(), timeout=FALLBACK_TIMEOUT)
+                return addr, resp
+            except Exception as ex:
+                return addr, None
+
+        with ThreadPoolExecutor(max_workers=len(fallback)) as executor:
+            futures = {executor.submit(query_addr, addr): addr for addr in fallback}
+            try:
+                for future in as_completed(futures, timeout=OVERALL_LEADER_LOOKUP_TIMEOUT):
+                    addr, resp = future.result()
+                    if resp and resp.success and resp.leader_address and resp.leader_address != "Unknown":
+                        print(f"Found leader at {resp.leader_address} via fallback address {addr}")
+                        self.connect_to_leader(resp.leader_address)
+                        if resp.replica_addresses:
+                            client_config["replica_addresses"] = list(resp.replica_addresses)
+                        return
+            except Exception as e:
+                print("Exception during fallback leader lookup:", e)
+        print("Leader lookup failed on all fallback addresses; keeping current connection.")
+        time.sleep(RETRY_DELAY)
 
     def call_rpc_with_retry(self, func, request, retries=3):
         """
@@ -75,15 +101,31 @@ class ChatClientApp(tk.Tk):
         """
         for i in range(retries):
             try:
-                return func(request, timeout=3)
+                return func(request, timeout=RPC_TIMEOUT)
             except grpc.RpcError as e:
                 if e.code() == grpc.StatusCode.UNAVAILABLE:
                     print("RPC UNAVAILABLE. Updating leader and retrying...")
                     self.update_leader()
-                    time.sleep(1)
+                    time.sleep(RETRY_DELAY)
                 else:
                     raise
         raise Exception("RPC failed after retries.")
+
+    def client_heartbeat_check(self):
+        """
+        Periodically send a GetLeaderInfo call to check that the client is still connected to a leader.
+        If the heartbeat fails, update the leader.
+        """
+        while self.running:
+            try:
+                resp = self.stub.GetLeaderInfo(chat_pb2.GetLeaderInfoRequest(), timeout=RPC_TIMEOUT)
+                if not (resp.success and resp.leader_address and resp.leader_address != "Unknown"):
+                    print("Heartbeat check failed: invalid response.")
+                    self.update_leader()
+            except Exception as e:
+                print("Heartbeat check failed:", e)
+                self.update_leader()
+            time.sleep(CLIENT_HEARTBEAT_INTERVAL)
 
     def show_frame(self, frame_class):
         frame = self.frames[frame_class]
@@ -96,6 +138,7 @@ class ChatClientApp(tk.Tk):
         return self.current_user
 
     def cleanup(self):
+        self.running = False
         self.destroy()
 
 class StartFrame(tk.Frame):
