@@ -1,14 +1,15 @@
 {
-  "client_connect_host": "127.0.0.1",      
-  "client_connect_port": 50051,          
-  "replica_addresses": [                   
+  "client_connect_host": "127.0.0.1",
+  "client_connect_port": 50051,
+  "replica_addresses": [
     "127.0.0.1:50051",
     "127.0.0.1:50052",
-    "127.0.0.1:50053"
+    "127.0.0.1:50053",
+    "127.0.0.1:50054"
   ],
-  "rpc_timeout": 1,                         
-  "fallback_timeout": 1,                    
-  "overall_leader_lookup_timeout": 5,       
-  "retry_delay": 1,                         
-  "client_heartbeat_interval": 3           
+  "rpc_timeout": 1,
+  "fallback_timeout": 1,
+  "overall_leader_lookup_timeout": 5,
+  "retry_delay": 1,
+  "client_heartbeat_interval": 10
 }

@@ -28,7 +28,7 @@ RPC_TIMEOUT = client_config.get("rpc_timeout", 1)
 FALLBACK_TIMEOUT = client_config.get("fallback_timeout", 1)
 OVERALL_LEADER_LOOKUP_TIMEOUT = client_config.get("overall_leader_lookup_timeout", 5)
 RETRY_DELAY = client_config.get("retry_delay", 1)
-CLIENT_HEARTBEAT_INTERVAL = client_config.get("client_heartbeat_interval", 10)
+CLIENT_HEARTBEAT_INTERVAL = client_config.get("client_heartbeat_interval", 5)
 
 def hash_password(password: str) -> str:
     return hashlib.sha256(password.encode()).hexdigest()
