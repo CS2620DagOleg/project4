@@ -9,7 +9,7 @@
   ],
   "rpc_timeout": 1,
   "fallback_timeout": 1,
-  "overall_leader_lookup_timeout": 5,
+  "overall_leader_lookup_timeout": 6,
   "retry_delay": 1,
-  "client_heartbeat_interval": 10
+  "client_heartbeat_interval": 5
 }
