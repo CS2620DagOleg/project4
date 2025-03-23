@@ -218,7 +218,6 @@ class ReplicatedChatService(chat_pb2_grpc.ChatServiceServicer):
             resp = stub.JoinCluster(req, timeout=3)
             if resp.success:
                 logging.info("Successfully joined cluster. State transferred.")
-                self.current_leader_address = self.current_leader_address
                 self.last_heartbeat = time.time()
                 # Synchronize local database with state from the leader.
                 state = json.loads(resp.state)
@@ -262,11 +261,12 @@ class ReplicatedChatService(chat_pb2_grpc.ChatServiceServicer):
             )
         else:
             addr = self.current_leader_address if self.current_leader_address else "Unknown"
+            # For followers, return the local replica_addresses list (even if it might be stale)
             return chat_pb2.GetLeaderInfoResponse(
                 success=True,
                 leader_address=addr,
                 message="Follower reporting leader info",
-                replica_addresses=[]
+                replica_addresses=self.replica_addresses
             )
 
     def replicate_to_followers(self, op_type, data):

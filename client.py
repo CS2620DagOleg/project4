@@ -68,6 +68,7 @@ class ChatClientApp(tk.Tk):
         """
         Try to update the leader connection by concurrently querying all fallback addresses.
         Each address is given a timeout (FALLBACK_TIMEOUT). Overall lookup waits up to OVERALL_LEADER_LOOKUP_TIMEOUT.
+        When a valid response is received, the replica_addresses from the response are merged with the local fallback list.
         """
         fallback = client_config.get("replica_addresses", [])
         def query_addr(addr):
@@ -87,8 +88,10 @@ class ChatClientApp(tk.Tk):
                     if resp and resp.success and resp.leader_address and resp.leader_address != "Unknown":
                         print(f"Found leader at {resp.leader_address} via fallback address {addr}")
                         self.connect_to_leader(resp.leader_address)
-                        if resp.replica_addresses:
-                            client_config["replica_addresses"] = list(resp.replica_addresses)
+                        # Merge the addresses instead of replacing:
+                        new_list = list(resp.replica_addresses) if resp.replica_addresses else []
+                        merged = set(fallback) | set(new_list)
+                        client_config["replica_addresses"] = list(merged)
                         return
             except Exception as e:
                 print("Exception during fallback leader lookup:", e)
