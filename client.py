@@ -17,7 +17,7 @@ import chat_pb2_grpc
 with open("config_client.json", "r") as config_file:
     client_config = json.load(config_file)
 
-# Force IPv4: use 127.0.0.1 explicitly
+# Force IPv4: use 127.0.0.1 explicitly for primary connection
 host = client_config.get("client_connect_host", "127.0.0.1")
 if host == "localhost":
     host = "127.0.0.1"
@@ -40,7 +40,7 @@ class ChatClientApp(tk.Tk):
         self.geometry("400x350")
         self.current_user = None
 
-        # Initial connection to the configured address.
+        # Initial connection to the primary address from config.
         self.leader_address = f"{client_config['client_connect_host']}:{client_config['client_connect_port']}"
         self.connect_to_leader(self.leader_address)
 
@@ -66,9 +66,9 @@ class ChatClientApp(tk.Tk):
 
     def update_leader(self):
         """
-        Try to update the leader connection by concurrently querying all fallback addresses.
-        Each address is given a timeout (FALLBACK_TIMEOUT). Overall lookup waits up to OVERALL_LEADER_LOOKUP_TIMEOUT.
-        When a valid response is received, the replica_addresses from the response are merged with the local fallback list.
+        Concurrently query all fallback addresses for the current leader.
+        Merge the received replica_addresses with the local runtime list,
+        and log the updated fallback list.
         """
         fallback = client_config.get("replica_addresses", [])
         def query_addr(addr):
@@ -88,10 +88,10 @@ class ChatClientApp(tk.Tk):
                     if resp and resp.success and resp.leader_address and resp.leader_address != "Unknown":
                         print(f"Found leader at {resp.leader_address} via fallback address {addr}")
                         self.connect_to_leader(resp.leader_address)
-                        # Merge the addresses instead of replacing:
-                        new_list = list(resp.replica_addresses) if resp.replica_addresses else []
+                        new_list = resp.replica_addresses if resp.replica_addresses else []
                         merged = set(fallback) | set(new_list)
                         client_config["replica_addresses"] = list(merged)
+                        print(f"[Client Update] New runtime replica list: {client_config['replica_addresses']}")
                         return
             except Exception as e:
                 print("Exception during fallback leader lookup:", e)
@@ -116,8 +116,8 @@ class ChatClientApp(tk.Tk):
 
     def client_heartbeat_check(self):
         """
-        Periodically send a GetLeaderInfo call to check that the client is still connected to a leader.
-        If the heartbeat fails, update the leader.
+        Periodically send a GetLeaderInfo call to verify connection.
+        Merge any updated replica addresses into the runtime fallback list and log them.
         """
         while self.running:
             try:
@@ -125,6 +125,11 @@ class ChatClientApp(tk.Tk):
                 if not (resp.success and resp.leader_address and resp.leader_address != "Unknown"):
                     print("Heartbeat check failed: invalid response.")
                     self.update_leader()
+                else:
+                    new_list = resp.replica_addresses if resp.replica_addresses else []
+                    merged = set(client_config.get("replica_addresses", [])) | set(new_list)
+                    client_config["replica_addresses"] = list(merged)
+                    print(f"[Client Heartbeat] Updated replica list: {client_config['replica_addresses']}")
             except Exception as e:
                 print("Heartbeat check failed:", e)
                 self.update_leader()
@@ -351,5 +356,5 @@ def main():
     app.protocol("WM_DELETE_WINDOW", app.cleanup)
     app.mainloop()
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()
