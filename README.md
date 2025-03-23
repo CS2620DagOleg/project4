@@ -30,6 +30,16 @@ python client.py
 python replicated_server.py --server_id 4 --server_host localhost --server_port 50054 --initial_leader false --join true
 
 
+### Logging/troubleshooting
+
+Each server/client has shell logging
+
+to inspect database:
+
+python list_db.py chosen.db
+
+
+
 
 
 ## Description 
