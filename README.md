@@ -10,6 +10,13 @@ python -m grpc_tools.protoc --proto_path=. --python_out=. --grpc_python_out=. ch
 
 ## HOW TO RUN 
 
+### Configuration and Connectivity:
+
+Default value is set in config.json
+
+Multiple start config is set in config_master.json.
+'instances' are NOT currently used.
+launch_servers.py is NOT currently used in order to separate servers to respective shells. 
 
 ### servers: (for each terminal )
 
@@ -29,6 +36,11 @@ python client.py
 
 python replicated_server.py --server_id 4 --server_host localhost --server_port 50054 --initial_leader false --join true
 
+
+
+### Timing Variables
+
+Pertinent variables such as lease duration, time-out frequency is set in each config.
 
 ### Logging/troubleshooting
 
