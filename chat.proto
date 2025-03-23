@@ -1,0 +1,157 @@
+syntax = "proto3";
+
+package chat;
+
+// The ChatService provides chat operations and internal methods.
+service ChatService {
+  // Client-facing RPCs
+  rpc CreateAccount(CreateAccountRequest) returns (CreateAccountResponse);
+  rpc Login(LoginRequest) returns (LoginResponse);
+  rpc ListAccounts(ListAccountsRequest) returns (ListAccountsResponse);
+  rpc SendMessage(SendMessageRequest) returns (SendMessageResponse);
+  rpc ReadNewMessages(ReadNewMessagesRequest) returns (ReadNewMessagesResponse);
+  rpc DeleteMessages(DeleteMessagesRequest) returns (DeleteMessagesResponse);
+  rpc DeleteAccount(DeleteAccountRequest) returns (DeleteAccountResponse);
+  rpc ListMessages(ListMessagesRequest) returns (ListMessagesResponse);
+
+  // Internal RPCs
+  rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);
+  rpc Election(ElectionRequest) returns (ElectionResponse);
+  rpc ReplicateOperation(ReplicationRequest) returns (ReplicationResponse);
+  rpc JoinCluster(JoinClusterRequest) returns (JoinClusterResponse);
+
+  // New RPC: returns current leader info and replica addresses.
+  rpc GetLeaderInfo(GetLeaderInfoRequest) returns (GetLeaderInfoResponse);
+}
+
+message CreateAccountRequest {
+  string username = 1;
+  string password = 2;
+}
+
+message CreateAccountResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message LoginRequest {
+  string username = 1;
+  string password = 2;
+}
+
+message LoginResponse {
+  bool success = 1;
+  string message = 2;
+  int32 unread_count = 3;
+}
+
+message ListAccountsRequest {
+  string username = 1;
+  string pattern = 2;
+}
+
+message ListAccountsResponse {
+  bool success = 1;
+  repeated string accounts = 2;
+}
+
+message SendMessageRequest {
+  string sender = 1;
+  string to = 2;
+  string content = 3;
+}
+
+message SendMessageResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message ReadNewMessagesRequest {
+  string username = 1;
+  int32 count = 2;
+}
+
+message ReadNewMessagesResponse {
+  bool success = 1;
+  repeated string messages = 2;
+}
+
+message DeleteMessagesRequest {
+  string username = 1;
+  repeated int32 message_ids = 2;
+}
+
+message DeleteMessagesResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message DeleteAccountRequest {
+  string username = 1;
+}
+
+message DeleteAccountResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message ListMessagesRequest {
+  string username = 1;
+}
+
+message ListMessagesResponse {
+  bool success = 1;
+  repeated string messages = 2;
+}
+
+// Heartbeat and election messages.
+message HeartbeatRequest {
+  int32 leader_id = 1;
+  int64 timestamp = 2;
+  string leader_address = 3;
+}
+
+message HeartbeatResponse {
+  bool success = 1;
+}
+
+message ElectionRequest {
+  int32 candidate_id = 1;
+}
+
+message ElectionResponse {
+  bool vote_granted = 1;
+}
+
+// Replication messages.
+message ReplicationRequest {
+  string operation_type = 1;
+  string data = 2;  // JSON-encoded operation data.
+}
+
+message ReplicationResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// Dynamic membership: join cluster.
+message JoinClusterRequest {
+  string new_server_address = 1;
+}
+
+message JoinClusterResponse {
+  bool success = 1;
+  string state = 2;    // JSON-encoded state.
+  string message = 3;
+}
+
+// Leader info (including replica addresses)
+message GetLeaderInfoRequest {
+}
+
+message GetLeaderInfoResponse {
+  bool success = 1;
+  string leader_address = 2;
+  string message = 3;
+  repeated string replica_addresses = 4;
+}

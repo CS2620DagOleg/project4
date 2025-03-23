@@ -1,0 +1,16 @@
+{
+    "instances": [
+      { "server_id": 1, "server_host": "localhost", "server_port": 50051, "initial_leader": true },
+      { "server_id": 2, "server_host": "localhost", "server_port": 50052, "initial_leader": false },
+      { "server_id": 3, "server_host": "localhost", "server_port": 50053, "initial_leader": false }
+    ],
+    "replica_addresses": [
+      "localhost:50051",
+      "localhost:50052",
+      "localhost:50053"
+    ],
+    "db_file": "chat.db",
+    "heartbeat_interval": 3,
+    "lease_timeout": 10
+  }
+  
