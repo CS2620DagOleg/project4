@@ -55,7 +55,8 @@ class ReplicatedChatService(chat_pb2_grpc.ChatServiceServicer):
         self.config = config
         self.server_id = config.get("server_id", 1)
         self.is_leader = config.get("initial_leader", False)
-        self.replica_addresses = config.get("replica_addresses", [])
+        # Initialize runtime replica list from config.
+        self.replica_addresses = config.get("replica_addresses", []).copy()
         self.heartbeat_interval = config.get("heartbeat_interval", 3)
         self.lease_timeout = config.get("lease_timeout", 10)
         self.last_heartbeat = time.time()
@@ -96,9 +97,11 @@ class ReplicatedChatService(chat_pb2_grpc.ChatServiceServicer):
         self.conn.commit()
 
     def send_heartbeat_loop(self):
-        """Leader sends heartbeat (with its address) to all replicas."""
+        """Leader sends heartbeat (with its address) to all replicas and logs the runtime replica list."""
         while True:
             for addr in self.replica_addresses:
+                if addr == self.my_address:
+                    continue
                 try:
                     channel = grpc.insecure_channel(addr)
                     stub = chat_pb2_grpc.ChatServiceStub(channel)
@@ -110,6 +113,7 @@ class ReplicatedChatService(chat_pb2_grpc.ChatServiceServicer):
                     stub.Heartbeat(req, timeout=2)
                 except Exception as e:
                     logging.error(f"Heartbeat to {addr} failed: {e}")
+            logging.info(f"[Server Heartbeat] Current replica list: {self.replica_addresses}")
             time.sleep(self.heartbeat_interval)
 
     def election_monitor_loop(self):
@@ -180,10 +184,10 @@ class ReplicatedChatService(chat_pb2_grpc.ChatServiceServicer):
     def join_cluster(self):
         """
         Called when a new server (with --join true) starts.
-        It loads config_master.json to obtain all instance addresses, then concurrently
-        queries each (via GetLeaderInfo) to determine the current leader.
+        It loads config_master.json to obtain all instance addresses, then concurrently queries each
+        (via GetLeaderInfo) to determine the current leader.
         Once a valid leader is found, the new server sends a JoinCluster request,
-        and then synchronizes its local database with the state returned.
+        synchronizes its local database with the returned state, and logs the updated replica list.
         """
         try:
             with open("config_master.json", "r") as f:
@@ -208,6 +212,8 @@ class ReplicatedChatService(chat_pb2_grpc.ChatServiceServicer):
                     if resp and resp.success and resp.leader_address and resp.leader_address != "Unknown":
                         logging.info(f"Found leader at {resp.leader_address} via candidate {addr}")
                         self.current_leader_address = resp.leader_address
+                        if resp.replica_addresses:
+                            self.replica_addresses = list(set(self.replica_addresses) | set(resp.replica_addresses))
                         break
             if not self.current_leader_address:
                 logging.error("No leader found among candidate addresses.")
@@ -219,11 +225,9 @@ class ReplicatedChatService(chat_pb2_grpc.ChatServiceServicer):
             if resp.success:
                 logging.info("Successfully joined cluster. State transferred.")
                 self.last_heartbeat = time.time()
-                # Synchronize local database with state from the leader.
                 state = json.loads(resp.state)
                 accounts = state.get("accounts", [])
                 messages = state.get("messages", [])
-                # Clear local tables.
                 self.cursor.execute("DELETE FROM accounts")
                 self.cursor.execute("DELETE FROM messages")
                 for account in accounts:
@@ -233,6 +237,7 @@ class ReplicatedChatService(chat_pb2_grpc.ChatServiceServicer):
                     self.cursor.execute("INSERT INTO messages (sender, recipient, content, read, timestamp) VALUES (?, ?, ?, ?, ?)",
                                         (message["sender"], message["recipient"], message["content"], message["read"], message["timestamp"]))
                 self.conn.commit()
+                logging.info(f"[JoinCluster] Updated runtime replica list: {self.replica_addresses}")
             else:
                 logging.error("Failed to join cluster: " + resp.message)
         except Exception as e:
@@ -249,10 +254,12 @@ class ReplicatedChatService(chat_pb2_grpc.ChatServiceServicer):
         messages = [{"id": row[0], "sender": row[1], "recipient": row[2], "content": row[3],
                      "read": row[4], "timestamp": row[5]} for row in self.cursor.fetchall()]
         state = {"accounts": accounts, "messages": messages}
+        logging.info(f"[JoinCluster RPC] Returning runtime replica list: {self.replica_addresses}")
         return chat_pb2.JoinClusterResponse(success=True, state=json.dumps(state), message="State transfer complete")
 
     def GetLeaderInfo(self, request, context):
         if self.is_leader:
+            logging.info(f"[GetLeaderInfo] Leader replica list: {self.replica_addresses}")
             return chat_pb2.GetLeaderInfoResponse(
                 success=True,
                 leader_address=self.my_address,
@@ -261,7 +268,7 @@ class ReplicatedChatService(chat_pb2_grpc.ChatServiceServicer):
             )
         else:
             addr = self.current_leader_address if self.current_leader_address else "Unknown"
-            # For followers, return the local replica_addresses list (even if it might be stale)
+            logging.info(f"[GetLeaderInfo] Follower replica list: {self.replica_addresses}")
             return chat_pb2.GetLeaderInfoResponse(
                 success=True,
                 leader_address=addr,
@@ -272,7 +279,6 @@ class ReplicatedChatService(chat_pb2_grpc.ChatServiceServicer):
     def replicate_to_followers(self, op_type, data):
         req = chat_pb2.ReplicationRequest(operation_type=op_type, data=json.dumps(data))
         for addr in self.replica_addresses:
-            # Skip self to avoid duplicate insertion.
             if addr == self.my_address:
                 continue
             try:
