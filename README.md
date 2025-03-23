@@ -20,7 +20,9 @@ python replicated_server.py --server_id 2 --server_host localhost --server_port 
 python replicated_server.py --server_id 3 --server_host localhost --server_port 50053 --initial_leader false
 
 
+### clients: (for each terminal, two)
 
+python client.py
 
 
 ### new server:
