@@ -240,21 +240,3 @@ def client_heartbeat_check(self):
     else:
         client_config["replica_addresses"] |= set(resp.replica_addresses)
 ```
-
----
-
-## Flow Diagram
-
-```mermaid
-flowchart TD
-    A[Servers start with their runtime replica lists] --> B[Leader sends periodic heartbeats (GetLeaderInfo)]
-    B --> C[Clients perform heartbeat checks]
-    C --> D{Valid leader found?}
-    D -- Yes --> E[Client updates connection and merges replica list]
-    D -- No --> F[Client triggers update_leader() and re-queries fallbacks]
-    E --> G[Client operations routed to current leader]
-    A --> H[New server joins via JoinCluster RPC]
-    H --> I[Leader adds new server to runtime replica list]
-    I --> B
-    I --> C
-```
