@@ -1,8 +1,8 @@
 {
     "server_id": 1,
-    "server_host": "localhost",
+    "server_host": "192.168.137.75",
     "server_port": 50051,
-    "replica_addresses": ["localhost:50051", "localhost:50052", "localhost:50053"],
+    "replica_addresses": ["192.168.137.75:50051", "192.168.137.75:50052", "192.168.137.75:50053"],
     "db_file": "chat.db",
     "heartbeat_interval": 3,
     "lease_timeout": 10,
