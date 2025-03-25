@@ -6,7 +6,7 @@
     "192.168.137.75:50052",
     "192.168.137.75:50053"
   ],
-  "rpc_timeout": 1,
+  "rpc_timeout": 10,
   "fallback_timeout": 1,
   "overall_leader_lookup_timeout": 6,
   "retry_delay": 1,
