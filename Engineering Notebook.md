@@ -152,4 +152,6 @@ A new server, which was not registered in the initial state and its IPv4 is unkn
 Client also updates its own server list through heartbeat response from the leader so if client’s heartbeat fails after a timeout, client will look in parallel threads for a functional server and once it finds an active leader, it will establish a connection with the leader server. 
 
 Any number of new servers can be added. We Delete any old data in the new server’s database (to avoid conflicts), and are restoring the full state received from the leader. Then all the servers will know it automatically. 
+7. **Gen AI Statement**
+
 
