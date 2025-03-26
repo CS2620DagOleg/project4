@@ -77,7 +77,7 @@ class ReplicatedChatService(chat_pb2_grpc.ChatServiceServicer):
                 self.join_cluster()
 
     def initialize_db(self):
-        """Initialize SQLite tables if they do not exist."""
+       
         self.cursor.execute('''
             CREATE TABLE IF NOT EXISTS accounts (
                 username TEXT PRIMARY KEY,
@@ -97,7 +97,7 @@ class ReplicatedChatService(chat_pb2_grpc.ChatServiceServicer):
         self.conn.commit()
 
     def send_heartbeat_loop(self):
-        """Leader sends heartbeat (with its address) to all replicas and logs the runtime replica list."""
+        
         while True:
             for addr in self.replica_addresses:
                 if addr == self.my_address:
@@ -117,7 +117,7 @@ class ReplicatedChatService(chat_pb2_grpc.ChatServiceServicer):
             time.sleep(self.heartbeat_interval)
 
     def election_monitor_loop(self):
-        """Follower monitors heartbeat; trigger election if lease expires."""
+       
         while True:
             if time.time() - self.last_heartbeat > self.lease_timeout:
                 logging.info("Lease expired; starting election process.")
@@ -125,7 +125,7 @@ class ReplicatedChatService(chat_pb2_grpc.ChatServiceServicer):
             time.sleep(1)
 
     def start_election(self):
-        """Initiate an election after a random backoff to avoid contention."""
+        
         backoff = random.uniform(0, 2)
         time.sleep(backoff)
         candidate_id = self.server_id
@@ -149,7 +149,7 @@ class ReplicatedChatService(chat_pb2_grpc.ChatServiceServicer):
             logging.info("Election lost; remaining as follower.")
 
     def Heartbeat(self, request, context):
-        """Update last heartbeat and current leader address on receiving heartbeat."""
+       
         self.last_heartbeat = time.time()
         self.current_leader_address = request.leader_address
         return chat_pb2.HeartbeatResponse(success=True)
@@ -182,13 +182,7 @@ class ReplicatedChatService(chat_pb2_grpc.ChatServiceServicer):
             return chat_pb2.ReplicationResponse(success=False, message=str(e))
 
     def join_cluster(self):
-        """
-        Called when a new server (with --join true) starts.
-        It loads config_master.json to obtain all instance addresses, then concurrently queries each
-        (via GetLeaderInfo) to determine the current leader.
-        Once a valid leader is found, the new server sends a JoinCluster request,
-        synchronizes its local database with the returned state, and logs the updated replica list.
-        """
+        
         try:
             with open("config_master.json", "r") as f:
                 master_config = json.load(f)
@@ -340,6 +334,12 @@ class ReplicatedChatService(chat_pb2_grpc.ChatServiceServicer):
         if not sender or not recipient or content is None:
             return chat_pb2.SendMessageResponse(success=False, message="Missing fields")
         timestamp_str = datetime.datetime.now().strftime('%m/%d %H:%M')
+
+
+        # Ensure the recipient account actually exists:
+        self.cursor.execute("SELECT 1 FROM accounts WHERE username=?", (recipient,))
+        if not self.cursor.fetchone():
+            return chat_pb2.SendMessageResponse(success=False, message=f"Recipient '{recipient}' does not exist.")
         try:
             self.cursor.execute("INSERT INTO messages (sender, recipient, content, read, timestamp) VALUES (?,?,?,?,?)",
                                 (sender, recipient, content, 0, timestamp_str))

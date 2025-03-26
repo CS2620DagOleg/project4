@@ -11,19 +11,19 @@ import threading
 import chat_pb2
 import chat_pb2_grpc
 
-# ---------------------------
-# Load client configuration from config_client.json
-# ---------------------------
+
+# Load client  from config_client.json
+
 with open("config_client.json", "r") as config_file:
     client_config = json.load(config_file)
 
-# Force IPv4: use 127.0.0.1 explicitly for primary connection
+# Force IPv4: use 127.0.0.1 for  connection
 host = client_config.get("client_connect_host", "127.0.0.1")
 if host == "localhost":
     host = "127.0.0.1"
 client_config["client_connect_host"] = host
 
-# Read adjustable timeout/retry parameters from the config.
+# Read parameters
 RPC_TIMEOUT = client_config.get("rpc_timeout", 1)
 FALLBACK_TIMEOUT = client_config.get("fallback_timeout", 1)
 OVERALL_LEADER_LOOKUP_TIMEOUT = client_config.get("overall_leader_lookup_timeout", 5)
@@ -40,11 +40,11 @@ class ChatClientApp(tk.Tk):
         self.geometry("400x350")
         self.current_user = None
 
-        # Initial connection to the primary address from config.
+        # Initial connection to the primary address from the config.
         self.leader_address = f"{client_config['client_connect_host']}:{client_config['client_connect_port']}"
         self.connect_to_leader(self.leader_address)
 
-        # Start background thread for client heartbeat checking.
+        # Start background thread 
         self.running = True
         threading.Thread(target=self.client_heartbeat_check, daemon=True).start()
 
@@ -58,18 +58,14 @@ class ChatClientApp(tk.Tk):
         self.show_frame(StartFrame)
 
     def connect_to_leader(self, address):
-        """Establish a new channel with the provided leader address."""
+       
         self.leader_address = address
         self.channel = grpc.insecure_channel(address)
         self.stub = chat_pb2_grpc.ChatServiceStub(self.channel)
         print(f"Connected to leader at {address}")
 
     def update_leader(self):
-        """
-        Concurrently query all fallback addresses for the current leader.
-        Merge the received replica_addresses with the local runtime list,
-        and log the updated fallback list.
-        """
+        
         fallback = client_config.get("replica_addresses", [])
         def query_addr(addr):
             try:
@@ -99,9 +95,7 @@ class ChatClientApp(tk.Tk):
         time.sleep(RETRY_DELAY)
 
     def call_rpc_with_retry(self, func, request, retries=3):
-        """
-        Helper to call an RPC. On UNAVAILABLE error, update leader and retry.
-        """
+        # helper to call an RPC
         for i in range(retries):
             try:
                 return func(request, timeout=RPC_TIMEOUT)
@@ -115,10 +109,7 @@ class ChatClientApp(tk.Tk):
         raise Exception("RPC failed after retries.")
 
     def client_heartbeat_check(self):
-        """
-        Periodically send a GetLeaderInfo call to verify connection.
-        Merge any updated replica addresses into the runtime fallback list and log them.
-        """
+       #periodically sending info for connection verification
         while self.running:
             try:
                 resp = self.stub.GetLeaderInfo(chat_pb2.GetLeaderInfoRequest(), timeout=RPC_TIMEOUT)
