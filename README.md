@@ -246,4 +246,7 @@ def client_heartbeat_check(self):
 - **Install the required dependence**
 - pip install grpcio grpcio-tools coverage
 - **Run the test**
-- python -m unittest test_distributed_chat.py 
+- python -m unittest test_distributed_chat.py
+
+  ##7. Gean AI Statement
+  - We have used copilot, powered by GPT 4, in this assignment for research, debugging and implementation design. 
