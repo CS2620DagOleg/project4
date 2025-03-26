@@ -153,5 +153,6 @@ Client also updates its own server list through heartbeat response from the lead
 
 Any number of new servers can be added. We Delete any old data in the new server’s database (to avoid conflicts), and are restoring the full state received from the leader. Then all the servers will know it automatically. 
 7. **Gen AI Statement**
+We have used copilot, powered by GPT 4, in this assignment for research, debugging and implementation design.
 
 
